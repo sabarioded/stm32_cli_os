@@ -15,9 +15,12 @@ void led_init(void) {
     /* Enable GPIOA clock - GPIOAEN */
     RCC_AHB2ENR |= (1U << 0);
 
-    /* set PA5 to output mode 01 */
+    /* 
+        Set PA5 to output mode 01
+        Moder has 2 bits for each pin
+    */
     GPIOA_MODER &= ~(0x3U << (LED_PIN * 2)); // clear bits [11:10]
-    GPIOA_MODER |=  (0x1U << (LED_PIN *2)); // set bits [11:10] to 01
+    GPIOA_MODER |=  (0x1U << (LED_PIN * 2)); // set bits [11:10] to 01
 }
 
 void led_on(void) {

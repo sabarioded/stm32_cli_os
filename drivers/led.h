@@ -1,6 +1,10 @@
 #ifndef LED_H
 #define LED_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Initialize led driver
  */
@@ -20,5 +24,9 @@ void led_off(void);
  * @brief toggle the led
  */
 void led_toggle(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LED_H */

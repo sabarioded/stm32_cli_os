@@ -9,7 +9,8 @@
 #define GPIOA_MODER         (*(volatile uint32_t *)(GPIOA_BASE + 0x0))
 #define GPIOA_ODR           (*(volatile uint32_t *)(GPIOA_BASE + 0x14))
 
-#define LED_PIN             5U
+#define LED_PIN_POS         5U
+#define LED_PIN_MASK        (1U << LED_PIN_POS)
 
 void led_init(void) {
     /* Enable GPIOA clock - GPIOAEN */
@@ -19,21 +20,21 @@ void led_init(void) {
         Set PA5 to output mode 01
         Moder has 2 bits for each pin
     */
-    GPIOA_MODER &= ~(0x3U << (LED_PIN * 2)); // clear bits [11:10]
-    GPIOA_MODER |=  (0x1U << (LED_PIN * 2)); // set bits [11:10] to 01
+    GPIOA_MODER &= ~(0x3U << (LED_PIN_POS * 2)); // clear bits [11:10]
+    GPIOA_MODER |=  (0x1U << (LED_PIN_POS * 2)); // set bits [11:10] to 01
 }
 
 void led_on(void) {
     /* set output to 1 */
-    GPIOA_ODR |= (1U << LED_PIN);
+    GPIOA_ODR |= LED_PIN_MASK;
 }
 
 void led_off(void) {
     /* set output to 0 */
-    GPIOA_ODR &= ~(1U << LED_PIN);
+    GPIOA_ODR &= ~LED_PIN_MASK;
 }
 
 void led_toggle(void) {
     /* toggle output bit */
-    GPIOA_ODR ^= (1U << LED_PIN);
+    GPIOA_ODR ^= LED_PIN_MASK;
 }

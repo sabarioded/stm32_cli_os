@@ -1,6 +1,9 @@
 #ifndef LED_H
 #define LED_H
 
+#include <stdint.h>
+#include "device_registers.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

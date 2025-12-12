@@ -1,10 +1,5 @@
 #include "systick.h"
 
-#define SYST_CSR        *((volatile uint32_t *)0xE000E010UL) /* SysTick Control and Status Register */
-#define SYST_RVR        *((volatile uint32_t *)0xE000E014UL) /* SysTick Reload value Register */
-#define SYST_CVR        *((volatile uint32_t *)0xE000E018UL) /* SysTick Current value Register */
-#define SYST_CALIB      *((volatile uint32_t *)0xE000E01CUL) /* SysTick Calibration value Register */
-
 /***************** SYS_CSR ******************/
 /* set to 1 to enable SysTick */
 #define SYST_CSR_ENABLE_POS     0U
@@ -52,7 +47,14 @@ static volatile uint32_t systick_tick_counter = 0;
 void SysTick_Handler(void)
 {
     systick_tick_counter++;
+
+    if (systick_tick_counter % 1000 == 0) {
+        task_garbage_collection(); 
+    }
+
+    yield_cpu(); /* trigger context switch */
 }
+
 
 /* initialize the SysTick driver with desired tick frequency (Hz) */
 int systick_init(uint32_t ticks_hz) {
@@ -73,26 +75,28 @@ int systick_init(uint32_t ticks_hz) {
     }
 
     /* disable SysTick for configuration */
-    SYST_CSR = 0;
+    SYSTICK->CSR = 0;
 
     /* set reload value */
-    SYST_RVR = (reload & SYST_RVR_RELOAD_MASK);
+    SYSTICK->RVR = (reload & SYST_RVR_RELOAD_MASK);
 
     /* reset current value */
-    SYST_CVR = 0;
+    SYSTICK->CVR = 0;
 
     /* enable and configure SysTick */    
-    SYST_CSR |= SYST_CSR_ENABLE_MASK    /* enable SysTick */
-            | SYST_CSR_TICKINT_MASK     /* enable SysTick interrupt */
-            | SYST_CSR_CLKSOURCE_MASK;  /* use processor clock */
+    SYSTICK->CSR |= SYST_CSR_ENABLE_MASK    /* enable SysTick */
+                | SYST_CSR_TICKINT_MASK     /* enable SysTick interrupt */
+                | SYST_CSR_CLKSOURCE_MASK;  /* use processor clock */
     return 0; /* success */
 }
+
 
 /* Return number of SysTick interrupts since init */
 uint32_t systick_get_ticks(void)
 {
     return systick_tick_counter;
 }
+
 
 /* Busy-wait for 'ticks' SysTick interrupts */
 void systick_delay_ticks(uint32_t ticks)

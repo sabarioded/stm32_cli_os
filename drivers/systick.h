@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include "system_clock.h"
+#include "device_registers.h"
+#include "scheduler.h"
 
 #ifdef __cplusplus
 extern "C" {

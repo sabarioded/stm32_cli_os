@@ -1,6 +1,9 @@
 #ifndef BUTTON_H
 #define BUTTON_H
 
+#include <stdint.h>
+#include "device_registers.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

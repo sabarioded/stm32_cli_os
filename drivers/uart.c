@@ -354,6 +354,8 @@ int uart_init(USART_t *UARTx, const UART_Config_t *config, uint32_t periph_clock
     /* Enable UART */
     UARTx->CR1 |= USART_CR1_UE;
 
+    __DSB(); // barrier for I/O synchronization
+
     return UART_OK;
 }
 
@@ -491,6 +493,7 @@ uint32_t uart_available(USART_t *UARTx)
         return 0;
     }
 
+    __DMB();
     uint32_t head = uart_rx_head[idx];
     uint32_t tail = uart_rx_tail[idx];
     return (head + UART_RX_BUFFER_SIZE - tail) % UART_RX_BUFFER_SIZE;
@@ -504,6 +507,7 @@ uint32_t uart_read_buffer(USART_t *UARTx, char *dst, uint32_t len)
         return 0;
     }
 
+    __DMB();
     uint32_t copied = 0;
     while ((copied < len) && (uart_available(UARTx) > 0U)) {
         uint32_t tail = uart_rx_tail[idx];
@@ -533,7 +537,9 @@ void uart_irq_handler(USART_t *UARTx)
 
         if (next != uart_rx_tail[idx]) {
             uart_rx_buf[idx][head] = b;
+            __DMB(); /* Ensure the data byte is written to memory before we publish the head pointer. */
             uart_rx_head[idx] = next;
+            __DMB();
         } else {
             uart_rx_overflow[idx]++;   // record overflow
         }

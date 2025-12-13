@@ -35,6 +35,17 @@ static inline void __ISB(void) {
 
 
 /**
+ * @brief   Data Memory Barrier (DMB).
+ * @details Ensures that all memory accesses requested prior to the DMB are 
+ * complete and visible to all other bus masters before any subsequent memory 
+ * accesses are started.
+ */
+static inline void __DMB(void) {
+    __asm volatile ("dmb 0xF" ::: "memory");
+}
+
+
+/**
  * @brief   Waits for specific bits in a register to be SET.
  * @param   reg      Pointer to the volatile register to monitor.
  * @param   mask     Bitmask of the flags to check.

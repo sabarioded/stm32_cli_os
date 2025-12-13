@@ -34,11 +34,18 @@ task_create_first:
     LDR r0, =_estack            /* load address of stack into R0 */
     MSR MSP, r0                 /* Copy R0 into the Main Stack Pointer */
 
-    /* set PendSV and SysTick to lowest priority */
+    /* set PendSV priority to 0xFF and SysTick priority to 0xFE */
     LDR r0, =SCB_SHPR3          /* save the address of SCB_SHPR3 in R0 */
     LDR r1, [r0]                /* load the 32 bit value at SCB_SHPR3 in R1 */
-    LDR r2, =0xFF               /* save the 8bit mask in R2 */
+
+    LDR r3, =0xFF00FFFF         /* mask to clear bits [23:16] */
+    AND r1, r1, r3              /* clear bits [23:16] */
+    LDR r3, =0x00FFFFFF         /* mask to clear bits [31:24] */
+    AND r1, r1, r3              /* clear bits [31:24] */
+
+    MOVS r2, #0xFF              /* save the 8bit mask in R2 */
     ORR r1, r1, r2, LSL #PENDSV_PRIO_SHIFT  /* set PendSV priority byte */
+    MOVS r2, #0xFE              /* save the 8bit mask in R2 */
     ORR r1, r1, r2, LSL #SYSTICK_PRIO_SHIFT /* set SysTick priority byte */
     STR r1, [r0]                /* store the updated priority value back to SCB_SHPR3 */
 

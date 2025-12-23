@@ -15,7 +15,7 @@
 
 /* Returns 1 if timer counted to 0 since last read */
 #define SYST_CSR_COUNTFLAG_POS  16U
-#define SYST_CSR_COUNTFLAG_MASK (1U << SYST_CSR_COUTFLAG_POS)
+#define SYST_CSR_COUNTFLAG_MASK (1U << SYST_CSR_COUNTFLAG_POS)
 
 /***************** SYST_RVR ******************/
 /* [23:0] Value to load into the SYST_CVR register when the counter is enabled and when it reaches 0 */
@@ -41,16 +41,15 @@
 #define SYST_CALIB_NOREF_MASK   (1UL << SYST_CALIB_NOREF_POS)
 
 /* Simple global tick counter incremented on each SysTick interrupt */
-static volatile uint32_t systick_tick_counter = 0;
+volatile uint32_t systick_ticks = 0;
 
 /* SysTick interrupt handler */
 void SysTick_Handler(void)
 {
-    systick_tick_counter++;
+    systick_ticks++;
 
-    if (systick_tick_counter % 1000 == 0) {
-        task_garbage_collection(); 
-    }
+    /* Wake any tasks that have finished sleeping */
+    scheduler_wake_sleeping_tasks();
 
     yield_cpu(); /* trigger context switch */
 }
@@ -94,15 +93,15 @@ int systick_init(uint32_t ticks_hz) {
 /* Return number of SysTick interrupts since init */
 uint32_t systick_get_ticks(void)
 {
-    return systick_tick_counter;
+    return systick_ticks;
 }
 
 
 /* Busy-wait for 'ticks' SysTick interrupts */
 void systick_delay_ticks(uint32_t ticks)
 {
-    uint32_t start = systick_tick_counter;
-    while ((systick_tick_counter - start) < ticks) {
+    uint32_t start = systick_ticks;
+    while ((systick_ticks - start) < ticks) {
         /* busy wait */
     }
 }

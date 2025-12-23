@@ -33,17 +33,6 @@ typedef enum {
     UART_WORDLENGTH_7B = 2,
 } UART_WordLength_t;
 
-/**
- * @brief Simple UART config structure
- *
- * This is kept for convenience if you ever want
- * a minimal configuration (Baud+word length only).
- */
-typedef struct {
-    uint32_t          BaudRate;
-    UART_WordLength_t WordLength;
-} UART_Config_t;
-
 /** Parity options */
 typedef enum {
     UART_PARITY_NONE = 0,
@@ -66,6 +55,7 @@ typedef struct {
     uint8_t           OverSampling8;///< 0 -> 16x, non-zero -> 8x
 } UART_Config_t;
 
+
 /**
  * @brief Initialize a UART/USART peripheral.
  *
@@ -77,6 +67,7 @@ typedef struct {
  */
 int uart_init(USART_t *UARTx, const UART_Config_t *config, uint32_t periph_clock_hz);
 
+
 /**
  * @brief Send one character.
  *
@@ -85,6 +76,7 @@ int uart_init(USART_t *UARTx, const UART_Config_t *config, uint32_t periph_clock
  * @return UART_OK on success, negative error on timeout/fail
  */
 int uart_send_char(USART_t *UARTx, char c);
+
 
 /**
  * @brief Send a null-terminated string.
@@ -95,6 +87,7 @@ int uart_send_char(USART_t *UARTx, char c);
  */
 int uart_send_string(USART_t *UARTx, const char *str);
 
+
 /**
  * @brief Receive one character.
  *
@@ -103,6 +96,7 @@ int uart_send_string(USART_t *UARTx, const char *str);
  * @return UART_OK on success, negative error on failure
  */
 int uart_receive_char(USART_t *UARTx, char *result);
+
 
 /**
  * @brief Receive a line/string into a buffer.
@@ -120,6 +114,7 @@ int uart_receive_char(USART_t *UARTx, char *result);
  */
 int uart_receive_string(USART_t *UARTx, char *buffer, uint32_t max_length);
 
+
 /**
  * @brief Register a per-UART RX callback (called from ISR when new byte arrives).
  *
@@ -128,6 +123,7 @@ int uart_receive_string(USART_t *UARTx, char *buffer, uint32_t max_length);
  */
 void uart_set_rx_callback(USART_t *UARTx, void (*cb)(char c));
 
+
 /**
  * @brief Enable or disable RX interrupt (RXNEIE). The actual IRQ must
  * be enabled in the NVIC by the application (this function only toggles
@@ -135,16 +131,19 @@ void uart_set_rx_callback(USART_t *UARTx, void (*cb)(char c));
  */
 void uart_enable_rx_interrupt(USART_t *UARTx, int enable);
 
+
 /**
  * @brief Read up to `len` bytes from the driver's RX circular buffer.
  * Returns number of bytes actually copied.
  */
 uint32_t uart_read_buffer(USART_t *UARTx, char *dst, uint32_t len);
 
+
 /**
  * @brief Return number of bytes currently available in RX buffer.
  */
 uint32_t uart_available(USART_t *UARTx);
+
 
 /**
  * @brief Generic handler that should be called from the real IRQ handler
@@ -153,10 +152,58 @@ uint32_t uart_available(USART_t *UARTx);
  */
 void uart_irq_handler(USART_t *UARTx);
 
+
 /**
  * @brief Track how many bytes have been lost due to RX buffer overflow.
  */
 uint32_t uart_get_overflow_count(USART_t *UARTx);
+
+
+/**
+ * @brief Get the number of RX errors (parity, framing, noise) that have occurred.
+ * 
+ * The error count increments each time an error condition is detected in the ISR.
+ * This can be used for monitoring communication health. The count is never 
+ * automatically cleared—the application must reset it manually if desired.
+ *
+ * @param UARTx UART instance
+ * @return Number of RX errors detected since initialization, or 0 if instance not found
+ */
+uint32_t uart_get_error_count(USART_t *UARTx);
+
+
+/**
+ * @brief Enqueue up to `len` bytes for interrupt-driven TX (TX ring buffer).
+ *
+ * @return number of bytes actually enqueued (0..len)
+ */
+uint32_t uart_write_buffer(USART_t *UARTx, const char *src, uint32_t len);
+
+
+/**
+ * @brief Enable or disable TX interrupt (TXEIE). The actual IRQ must
+ * be enabled in the NVIC by the application (this function only toggles
+ * the peripheral interrupt enable bit).
+ *
+ * @param UARTx UART instance
+ * @param enable 1 to enable, 0 to disable
+ */
+void uart_enable_tx_interrupt(USART_t *UARTx, int enable);
+
+
+/**
+ * @brief Return number of bytes pending in TX buffer.
+ */
+uint32_t uart_tx_pending(USART_t *UARTx);
+
+
+/**
+ * @brief Blocking flush: waits for TX buffer empty and hardware TC flag set.
+ * * @param UARTx UART instance
+ * @return UART_OK (0) on success, or a negative error code on failure.
+ */
+int uart_flush(USART_t *UARTx);
+
 
 #ifdef __cplusplus
 }

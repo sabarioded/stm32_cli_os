@@ -10,6 +10,9 @@
 extern "C" {
 #endif
 
+/* Global SysTick counter - incremented by SysTick_Handler */
+extern volatile uint32_t systick_ticks;
+
 /**
  * @brief Initialize SysTick timer to generate interrupts at specified frequency.
  * 

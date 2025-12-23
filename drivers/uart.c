@@ -1,6 +1,7 @@
 #include <stddef.h>      /* for NULL */
 #include "uart.h"
 #include "utils.h"
+#include "project_config.h"
 
 /* RCC_AHB2ENR  – AHB2 peripheral clock enable register
  * Bits 3:0 control the clock to GPIOA..GPIOD.
@@ -66,6 +67,9 @@
 #define USART_CR1_RXNEIE_POS    (5)
 #define USART_CR1_RXNEIE        (1UL << USART_CR1_RXNEIE_POS) // RXNE interrupt enable (receive data ready)
 
+#define USART_CR1_TCIE_POS      (6)
+#define USART_CR1_TCIE          (1UL << USART_CR1_TCIE_POS)  // Transmission complete interrupt enable
+
 #define USART_CR1_TXEIE_POS     (7)
 #define USART_CR1_TXEIE         (1UL << USART_CR1_TXEIE_POS)  // TXE interrupt enable (transmit data register empty)
 
@@ -96,8 +100,21 @@
 #define USART_ISR_RXNE_POS  (5)
 #define USART_ISR_RXNE      (1UL << USART_ISR_RXNE_POS)  // RXNE: read data register not empty
 
+#define USART_ISR_TC_POS    (6)
+#define USART_ISR_TC        (1UL << USART_ISR_TC_POS)    // TC: transmission complete
+
 #define USART_ISR_TXE_POS   (7)
 #define USART_ISR_TXE       (1UL << USART_ISR_TXE_POS)   // TXE: transmit data register empty
+
+
+/* ICR – Interrupt Clear Register
+ * Write 1 to these bits to clear the corresponding flag
+ */
+#define USART_ICR_TCCF      (1UL << 6)   // Transmission complete clear flag
+#define USART_ICR_PECF      (1UL << 0)   // Parity error clear flag
+#define USART_ICR_FECF      (1UL << 1)   // Framing error clear flag
+#define USART_ICR_NECF      (1UL << 2)   // Noise error clear flag
+#define USART_ICR_ORECF     (1UL << 3)   // Overrun error clear flag
 
 
 /* CR2 – Control Register 2
@@ -128,22 +145,28 @@
     }                                                             \
 } while (0)
 
-
-/* Simple RX circular buffers per instance */
 #define UART_MAX_INSTANCES   6
-#define UART_RX_BUFFER_SIZE  256
 
 /* We track these instances for buffered RX + callbacks. */
 static USART_t *uart_instances[UART_MAX_INSTANCES];
 
+/* RX circular buffers per instance */
 static volatile uint8_t  uart_rx_buf[UART_MAX_INSTANCES][UART_RX_BUFFER_SIZE];
 static volatile uint32_t uart_rx_head[UART_MAX_INSTANCES];
 static volatile uint32_t uart_rx_tail[UART_MAX_INSTANCES];
 static volatile uint32_t uart_rx_overflow[UART_MAX_INSTANCES];
+static volatile uint32_t uart_rx_errors[UART_MAX_INSTANCES];  /* Error count (parity, framing, noise) */
+
+/* TX circular buffers per instance */
+static volatile uint8_t  uart_tx_buf[UART_MAX_INSTANCES][UART_RX_BUFFER_SIZE];
+static volatile uint32_t uart_tx_head[UART_MAX_INSTANCES];
+static volatile uint32_t uart_tx_tail[UART_MAX_INSTANCES];
+static volatile uint32_t uart_tx_overflow[UART_MAX_INSTANCES];
 
 static void (*uart_rx_callback[UART_MAX_INSTANCES])(char) = { 0 };
 
-/* Helper: find array index for a given instance */
+
+/* Find array index for a given instance */
 static int uart_get_index(USART_t *UARTx)
 {
     for (int i = 0; i < UART_MAX_INSTANCES; ++i) {
@@ -154,7 +177,8 @@ static int uart_get_index(USART_t *UARTx)
     return -1;
 }
 
-/* Helper: register a UART instance and return its index */
+
+/* Register a UART instance and return its index */
 static int uart_register_instance(USART_t *UARTx)
 {
     for (int i = 0; i < UART_MAX_INSTANCES; ++i)
@@ -168,13 +192,19 @@ static int uart_register_instance(USART_t *UARTx)
             uart_instances[i] = UARTx;
             uart_rx_head[i] = 0;
             uart_rx_tail[i] = 0;
+            uart_rx_overflow[i] = 0;
+            uart_rx_errors[i] = 0;
+            uart_tx_head[i] = 0;
+            uart_tx_tail[i] = 0;
+            uart_tx_overflow[i] = 0;
             return i;
         }
     }
     return -1; // no free slots
 }
 
-/* Helper: Enable peripheral clocks and configure GPIO pins for a given UARTx. */
+
+/* Enable peripheral clocks and configure GPIO pins for a given UARTx. */
 static void uart_enable_clocks_and_pins(USART_t *UARTx)
 {
     if (UARTx == USART1) {
@@ -231,7 +261,8 @@ static void uart_enable_clocks_and_pins(USART_t *UARTx)
     }
 }
 
-/* initialize UART with full config */
+
+/* Initialize UART with full config */
 int uart_init(USART_t *UARTx, const UART_Config_t *config, uint32_t periph_clock_hz)
 {
     if ((UARTx == NULL) || (config == NULL) || (config->BaudRate == 0U)) {
@@ -359,7 +390,8 @@ int uart_init(USART_t *UARTx, const UART_Config_t *config, uint32_t periph_clock
     return UART_OK;
 }
 
-/* send a char via uart */
+
+/* Send a char via uart */
 int uart_send_char(USART_t *UARTx, char c)
 {
     if (UARTx == NULL) {
@@ -377,7 +409,8 @@ int uart_send_char(USART_t *UARTx, char c)
     return UART_OK;
 }
 
-/* send a string via uart. (does NOT send the terminating '\0') */
+
+/* Send a string via uart. (does NOT send the terminating '\0') */
 int uart_send_string(USART_t *UARTx, const char *str)
 {
     if ((UARTx == NULL) || (str == NULL)) {
@@ -394,7 +427,8 @@ int uart_send_string(USART_t *UARTx, const char *str)
     return UART_OK;
 }
 
-/* receive a char via uart */
+
+/* Receive a char via uart */
 int uart_receive_char(USART_t *UARTx, char *result)
 {
     if ((UARTx == NULL) || (result == NULL)) {
@@ -411,6 +445,11 @@ int uart_receive_char(USART_t *UARTx, char *result)
 
     /* Read data (this clears RXNE flag and helps clear ORE) */
     *result = (char)(UARTx->RDR & 0xFFU);
+
+    /* Clear error flags if present */
+    if (isr_flags & (USART_ISR_PE | USART_ISR_FE | USART_ISR_NE | USART_ISR_ORE)) {
+        UARTx->ICR = USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF | USART_ICR_ORECF;
+    }
 
     /* Check error flags now that data has been read */
     if (isr_flags & (USART_ISR_ORE | USART_ISR_FE | USART_ISR_NE)) {
@@ -429,7 +468,8 @@ int uart_receive_char(USART_t *UARTx, char *result)
     return UART_OK;
 }
 
-/* receive a string via uart. */
+
+/* Receive a string via uart. */
 int uart_receive_string(USART_t *UARTx, char *buffer, uint32_t max_length)
 {
     if ((UARTx == NULL) || (buffer == NULL) || (max_length == 0U)) {
@@ -461,6 +501,7 @@ int uart_receive_string(USART_t *UARTx, char *buffer, uint32_t max_length)
     return UART_OK;
 }
 
+
 /* Register RX callback */
 void uart_set_rx_callback(USART_t *UARTx, void (*cb)(char c))
 {
@@ -470,6 +511,7 @@ void uart_set_rx_callback(USART_t *UARTx, void (*cb)(char c))
     }
     uart_rx_callback[idx] = cb;
 }
+
 
 /* Enable/disable RX interrupt */
 void uart_enable_rx_interrupt(USART_t *UARTx, int enable)
@@ -485,6 +527,7 @@ void uart_enable_rx_interrupt(USART_t *UARTx, int enable)
     }
 }
 
+
 /* Return number of bytes in RX buffer */
 uint32_t uart_available(USART_t *UARTx)
 {
@@ -493,11 +536,14 @@ uint32_t uart_available(USART_t *UARTx)
         return 0;
     }
 
-    __DMB();
+    uint32_t basepri_state = enter_critical_basepri(MAX_SYSCALL_PRIORITY); 
     uint32_t head = uart_rx_head[idx];
     uint32_t tail = uart_rx_tail[idx];
+    exit_critical_basepri(basepri_state);
+
     return (head + UART_RX_BUFFER_SIZE - tail) % UART_RX_BUFFER_SIZE;
 }
+
 
 /* Read bytes from RX buffer */
 uint32_t uart_read_buffer(USART_t *UARTx, char *dst, uint32_t len)
@@ -507,16 +553,22 @@ uint32_t uart_read_buffer(USART_t *UARTx, char *dst, uint32_t len)
         return 0;
     }
 
-    __DMB();
     uint32_t copied = 0;
-    while ((copied < len) && (uart_available(UARTx) > 0U)) {
-        uint32_t tail = uart_rx_tail[idx];
+
+    uint32_t stat = enter_critical_basepri(MAX_SYSCALL_PRIORITY);
+    uint32_t head = uart_rx_head[idx];
+    uint32_t tail = uart_rx_tail[idx];
+
+    while ((copied < len) && (head != tail)) {
         dst[copied++] = (char)uart_rx_buf[idx][tail];
-        uart_rx_tail[idx] = (tail + 1U) % UART_RX_BUFFER_SIZE;
+        tail = (tail + 1U) % UART_RX_BUFFER_SIZE;
     }
+    uart_rx_tail[idx] = tail;
+    exit_critical_basepri(stat);
 
     return copied;
 }
+
 
 /* function for IRQ Handlers */
 void uart_irq_handler(USART_t *UARTx)
@@ -526,10 +578,15 @@ void uart_irq_handler(USART_t *UARTx)
         return;
     }
 
-    uint32_t isr = UARTx->ISR;
-
-    if (isr & USART_ISR_RXNE) {
+    if (UARTx->ISR & USART_ISR_RXNE) {
         uint8_t b = (uint8_t)(UARTx->RDR & 0xFFU);
+
+        /* Clear any error flags that may have occurred during reception */
+        uint32_t isr_flags = UARTx->ISR;
+        if (isr_flags & (USART_ISR_PE | USART_ISR_FE | USART_ISR_NE | USART_ISR_ORE)) {
+            uart_rx_errors[idx]++;  /* Track error occurrence */
+            UARTx->ICR = USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF | USART_ICR_ORECF;
+        }
 
         /* Put into circular buffer */
         uint32_t head = uart_rx_head[idx];
@@ -549,6 +606,22 @@ void uart_irq_handler(USART_t *UARTx)
             uart_rx_callback[idx]((char)b);
         }
     }
+
+    /* Check if the Transmit Data Register is Empty */
+    if (UARTx->ISR & USART_ISR_TXE) {
+        uint32_t head = uart_tx_head[idx];
+        uint32_t tail = uart_tx_tail[idx];
+        
+        /* If the buffer is not empty transmit*/
+        if (head != tail) {
+            UARTx->TDR = uart_tx_buf[idx][tail];
+            
+            uart_tx_tail[idx] = (tail + 1U) % UART_TX_BUFFER_SIZE;
+        } else {
+            /* Buffer is empty, stop the interrupt source */
+            UARTx->CR1 &= ~USART_CR1_TXEIE; 
+        }
+    }
 }
 
 
@@ -561,18 +634,170 @@ uint32_t uart_get_overflow_count(USART_t *UARTx)
 }
 
 
-// /* Weak ISR wrappers override startup aliases and forward to generic handler */
-// void USART1_IRQHandler(void)
-// {
-//     uart_irq_handler(USART1);
-// }
+/**
+ * @brief Get the number of RX errors (parity, framing, noise) that occurred.
+ * This counter increments each time an error flag is detected in the ISR.
+ * 
+ * @param UARTx UART instance
+ * @return Number of RX errors detected, or 0 if instance not found
+ */
+uint32_t uart_get_error_count(USART_t *UARTx)
+{
+    int idx = uart_get_index(UARTx);
+    if (idx < 0) return 0;
+    return uart_rx_errors[idx];
+}
 
-// void USART2_IRQHandler(void)
-// {
-//     uart_irq_handler(USART2);
-// }
 
-// void USART3_IRQHandler(void)
-// {
-//     uart_irq_handler(USART3);
-// }
+/*
+ * Enqueue up to `len` bytes for interrupt-driven TX (TX ring buffer).
+ * Requires NVIC IRQ enabled for that USARTx (e.g. NVIC_EnableIRQ(USART2_IRQn)).
+ * The driver will set TXEIE to kick transmission when data is queued.
+ * The application must call uart_enable_tx_interrupt() once to initialize this path.
+ */
+uint32_t uart_write_buffer(USART_t *UARTx, const char *src, uint32_t len) {
+    if (UARTx == NULL) {
+        return 0;
+    }
+
+    int idx = uart_get_index(UARTx);
+    if (idx < 0) {
+        return 0;
+    }
+    
+    uint32_t sent = 0;
+    uint32_t basepri_state;
+
+    /* Ensure critical section because interrupts modify */
+    basepri_state = enter_critical_basepri(MAX_SYSCALL_PRIORITY); 
+
+    /* Loop and Enqueue Data */
+    while (sent < len) {
+        uint32_t head = uart_tx_head[idx];
+        uint32_t tail = uart_tx_tail[idx];
+        
+        /* Calculate the next head pointer */
+        uint32_t next_head = (head + 1U) % UART_TX_BUFFER_SIZE;
+
+        if (next_head == tail) {
+            break;
+        }
+        
+        // Enqueue byte
+        uart_tx_buf[idx][head] = src[sent];
+        __DMB(); /* Ensure data is written before updating head pointer */
+        uart_tx_head[idx] = next_head;
+        __DMB(); /* Ensure head pointer is visible before ISR sees new data */
+
+        sent++;
+    }
+
+    // if data was sent enable TX interrupt */
+    if (sent > 0) {
+        UARTx->CR1 |= USART_CR1_TXEIE;
+    }
+
+    /* Exit Critical Section */
+    exit_critical_basepri(basepri_state);
+
+    return sent;
+}
+
+
+/* Enable TX interrupts */
+void uart_enable_tx_interrupt(USART_t *UARTx, int enable)
+{
+    if (UARTx == NULL) {
+        return;
+    }
+
+    if (enable) {
+        UARTx->CR1 |= USART_CR1_TXEIE;
+    } else {
+        UARTx->CR1 &= ~USART_CR1_TXEIE;
+    }
+    
+    __DSB();
+}
+
+
+/* Return number of bytes pending in TX buffer. */
+uint32_t uart_tx_pending(USART_t *UARTx)
+{
+    int idx = uart_get_index(UARTx);
+    if (idx < 0) return 0;
+
+    uint32_t stat = enter_critical_basepri(MAX_SYSCALL_PRIORITY);
+    uint32_t head = uart_tx_head[idx];
+    uint32_t tail = uart_tx_tail[idx];
+    exit_critical_basepri(stat);
+
+    /* Circular buffer: calculate distance from tail to head */
+    return (head + UART_TX_BUFFER_SIZE - tail) % UART_TX_BUFFER_SIZE;
+}
+
+
+/* Waits for TX buffer empty and hardware TC flag set.
+ * 
+ * IMPORTANT: Requires that USART_CR1_TXEIE (TX interrupt) is enabled.
+ * Call uart_enable_tx_interrupt(UARTx, 1) before using this.
+ */
+int uart_flush(USART_t *UARTx)
+{
+    int idx = uart_get_index(UARTx);
+    if (idx < 0) return UART_FAIL;
+
+    /* Wait for the Software TX Buffer to Empty
+     * Yields CPU to other tasks while ISR drains the buffer.
+     */
+    while (uart_tx_pending(UARTx) > 0) {
+        yield_cpu();
+    }
+
+    /* Wait for the Hardware Transmission Complete (TC) flag
+     * The TX buffer is now empty. We must wait for the last byte to physically
+     * leave the shift register.
+     */
+    int ret = wait_for_flag_set(&UARTx->ISR, USART_ISR_TC, UART_MAX_ITERATIONS);
+    
+    if (ret != UART_OK) {
+        return UART_ERR_TIMEOUT;
+    }
+    
+    /* Clear the TC flag for edge-triggered behavior in future calls */
+    UARTx->ICR = USART_ICR_TCCF;
+
+    return UART_OK;
+}
+
+
+/* Weak ISR wrappers override startup aliases and forward to generic handler */
+void USART1_IRQHandler(void)
+{
+    uart_irq_handler(USART1);
+}
+
+void USART2_IRQHandler(void)
+{
+    uart_irq_handler(USART2);
+}
+
+void USART3_IRQHandler(void)
+{
+    uart_irq_handler(USART3);
+}
+
+void UART4_IRQHandler(void)
+{
+    uart_irq_handler(UART4);
+}
+
+void UART5_IRQHandler(void)
+{
+    uart_irq_handler(UART5);
+}
+
+void LPUART1_IRQHandler(void)
+{
+    uart_irq_handler(LPUART1);
+}

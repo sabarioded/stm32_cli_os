@@ -81,7 +81,6 @@
    Scheduler Configuration
    ============================================================================ */
 #define MAX_TASKS              58     /* Maximum number of tasks */
-#define STACK_SIZE_IN_WORDS    255    /* Stack size: 255 words = 1020 bytes per task */
 #define SYSTICK_FREQ_HZ        1000   /* SysTick interrupt frequency (1 kHz = 1ms tick) */
 
 /* Stack overflow detection */
@@ -105,6 +104,22 @@
 #define MAX_SYSCALL_PRIORITY   5   /* Highest priority that can call RTOS functions */
 #define SYSTICK_PRIORITY       14  /* SysTick priority (lower than peripherals) */
 #define PENDSV_PRIORITY        15  /* PendSV priority (lowest for context switch) */
+
+/* ============================================================================
+   Stack Size Configuration
+   ============================================================================ */
+#define STACK_SIZE_IN_WORDS      255    /* Default: 255 words = 1020 bytes */
+#define STACK_SIZE_BYTES         (STACK_SIZE_IN_WORDS * sizeof(uint32_t))
+
+/* Dynamic allocation limits */
+#define STACK_MIN_SIZE_BYTES     512    /* Minimum stack size (128 words) */
+#define STACK_MAX_SIZE_BYTES     8192   /* Maximum stack size (2048 words) */
+
+/* Common stack sizes (for convenience) */
+#define STACK_SIZE_512B         512    /* For simple tasks */
+#define STACK_SIZE_1KB          1024   /* For normal tasks (default) */
+#define STACK_SIZE_2KB          2048   /* For tasks with deep call stacks */
+#define STACK_SIZE_4KB          4096   /* For tasks with large local variables */
 
 /* ============================================================================
    Debug Configuration

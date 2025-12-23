@@ -22,6 +22,9 @@ extern uint32_t __heap_limit__;   /* End of SRAM1 (end of heap) */
 #define NVIC_ISER0               (*((volatile uint32_t *)(NVIC_BASE + 0x000)))
 #define USART2_IRQn              38
 
+#define SIZE_1KB                1024    
+#define SIZE_2KB                2048
+
 /* ---------- UART2 CLI Wrappers ---------- */
 
 /* Non-blocking getc for CLI */
@@ -145,11 +148,11 @@ int main(void)
     app_commands_register_all();
     
     /* Create application tasks */
-    task_create(task_blink, NULL);
-    task_create(task_button_logger, NULL);
+    task_create(task_blink, NULL, SIZE_1KB);
+    task_create(task_button_logger, NULL, SIZE_1KB);
     
     /* Create CLI task */
-    task_create(cli_task_entry, NULL);
+    task_create(cli_task_entry, NULL, SIZE_2KB);
     
     /* Start the scheduler - does not return */
     scheduler_start();

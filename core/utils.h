@@ -12,6 +12,7 @@ extern "C" {
 #define __WFI()         __asm volatile ("wfi")
 #define KERNEL_NOP()    __asm volatile ("nop")
 
+#define MAX_SYSCALL_PRIORITY     0x80
 
 /**
  * @brief   Data Synchronization Barrier (DSB).

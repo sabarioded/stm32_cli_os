@@ -303,7 +303,7 @@ void task_block_current(void) {
 
 
 /* Delete a task */
-task_return_t task_delete(uint16_t task_id) {
+int32_t task_delete(uint16_t task_id) {
     uint32_t stat = enter_critical_basepri(MAX_SYSCALL_PRIORITY);
 
     task_t *task_to_delete = NULL;

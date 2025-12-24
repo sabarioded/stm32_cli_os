@@ -200,7 +200,7 @@ uint32_t cli_printf(const char *text, ...) {
 
 
 /* register a new command in the cli */
-uint32_t cli_register_command(const cli_command_t *cmd) {
+int32_t cli_register_command(const cli_command_t *cmd) {
     if(cli_ctx.cmd_count >= CLI_MAX_CMDS) return CLI_ERR;
     if(!cmd || !cmd->name || !cmd->handler) return CLI_ERR;
 
@@ -210,7 +210,7 @@ uint32_t cli_register_command(const cli_command_t *cmd) {
 
 
 /* unregister a new command in the cli */
-uint32_t cli_unregister_command(const char *name) {
+int32_t cli_unregister_command(const char *name) {
     for (uint32_t i = 0; i < cli_ctx.cmd_count; i++) {
         if(strcmp(name, cli_ctx.commands[i].name) == 0) {
             cli_ctx.commands[i] = cli_ctx.commands[cli_ctx.cmd_count-1];
@@ -223,7 +223,7 @@ uint32_t cli_unregister_command(const char *name) {
 
 
 /* Initialize the cli */
-uint32_t cli_init(const char *prompt, cli_getc_fn_t getc, cli_puts_fn_t puts) {
+int32_t cli_init(const char *prompt, cli_getc_fn_t getc, cli_puts_fn_t puts) {
     memset(&cli_ctx, 0, sizeof(cli_ctx));
     cli_ctx.prompt = prompt;
     cli_ctx.getc = getc;

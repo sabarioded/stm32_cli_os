@@ -9,11 +9,12 @@ extern "C" {
 
 /****** Return codes ******/
 typedef enum {
-    CLI_OK = 0,
-    CLI_ERR,
-    CLI_ERR_NOCMD,
-    CLI_ERR_TOOLONG,
-    CLI_ERR_BAD_ARGS
+    CLI_OK              = 0,
+    CLI_ERR             = -1,
+    CLI_ERR_NOCMD       = -2,
+    CLI_ERR_TOOLONG     = -3,
+    CLI_ERR_BAD_ARGS    = -4,
+    CLI_ERR_BUSY        = -5
 } cli_status_t;
 
 /* Callback for command handlers 
@@ -44,7 +45,7 @@ typedef struct {
  * @param puts Function pointer to string write
  * @return CLI_OK on success
  */
-uint32_t cli_init(const char *prompt, cli_getc_fn_t getc, cli_puts_fn_t puts);
+int32_t cli_init(const char *prompt, cli_getc_fn_t getc, cli_puts_fn_t puts);
 
 
 /**
@@ -52,7 +53,7 @@ uint32_t cli_init(const char *prompt, cli_getc_fn_t getc, cli_puts_fn_t puts);
  * @param cmd Pointer to the command structure (must persist in memory)
  * @return CLI_OK on success, CLI_ERR if table full
  */
-uint32_t cli_register_command(const cli_command_t *cmd);
+int32_t cli_register_command(const cli_command_t *cmd);
 
 
 /**
@@ -60,7 +61,7 @@ uint32_t cli_register_command(const cli_command_t *cmd);
  * @param name Command name string
  * @return CLI_OK on success, CLI_ERR_NOCMD if not found
  */
-uint32_t cli_unregister_command(const char *name);
+int32_t cli_unregister_command(const char *name);
 
 
 /**

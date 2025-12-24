@@ -59,10 +59,10 @@ typedef enum task_state {
 } task_state_t;
 
 typedef enum task_return {
-    TASK_DELETE_SUCCESS,
-    TASK_DELETE_TASK_NOT_FOUND,
-    TASK_DELETE_IS_IDLE,
-    TASK_DELETE_IS_CURRENT_TASK,
+    TASK_DELETE_SUCCESS         = 0,
+    TASK_DELETE_TASK_NOT_FOUND  = -1,
+    TASK_DELETE_IS_IDLE         = -2,
+    TASK_DELETE_IS_CURRENT_TASK = -3
 } task_return_t;
 
 typedef struct task_struct {
@@ -149,7 +149,7 @@ void task_block_current(void);
  * @param task_id ID of the task to delete
  * @return TASK_DELETE_SUCCESS on success, otherwise failure
  */
-task_return_t task_delete(uint16_t task_id);
+int32_t task_delete(uint16_t task_id);
 
 
 /**

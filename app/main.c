@@ -11,7 +11,7 @@
 #include "project_config.h"
 #include "app_commands.h"
 #if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
-#include "heap.h"
+#include "stm32_alloc.h"
 /* Linker script symbols for heap */
 extern uint8_t _end;              /* End of .bss section (start of heap) */
 extern uint32_t __heap_limit__;   /* End of SRAM1 (end of heap) */
@@ -113,12 +113,7 @@ int main(void)
     void *heap_start_addr = (void*)&_end;
     size_t heap_size = (size_t)((uint32_t)&__heap_limit__ - (uint32_t)&_end);
     
-    if (heap_init(heap_start_addr, heap_size) != 0) {
-        /* Heap initialization failed - critical error */
-        while(1) {
-            __asm volatile ("nop");
-        }
-    }
+    stm32_allocator_init(heap_start_addr, heap_size);
 #endif
     
     /* Initialize scheduler and SysTick (1 kHz tick) */
@@ -143,6 +138,6 @@ int main(void)
 
     /* Should never reach here */
     while (1) {
-        __asm volatile ("nop");
+        KERNEL_NOP();
     }
 }

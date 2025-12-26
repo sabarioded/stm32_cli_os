@@ -40,6 +40,8 @@
 #define SYST_CALIB_NOREF_POS    31U
 #define SYST_CALIB_NOREF_MASK   (1UL << SYST_CALIB_NOREF_POS)
 
+extern void scheduler_wake_sleeping_tasks(void);
+
 /* Simple global tick counter incremented on each SysTick interrupt */
 volatile uint32_t systick_ticks = 0;
 

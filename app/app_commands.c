@@ -1,7 +1,7 @@
 #include "app_commands.h"
 #include "cli.h"
 #include "scheduler.h"
-#include "heap.h"
+#include "stm32_alloc.h"
 #include <string.h>
 
 #if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
@@ -11,9 +11,6 @@
 /* Forward declarations */
 static int cmd_heap_stats_handler(int argc, char **argv);
 static int cmd_task_list_handler(int argc, char **argv);
-#if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
-static int cmd_heap_test_handler(int argc, char **argv);
-#endif
 
 /* Command definitions */
 static const cli_command_t heap_stats_cmd = {
@@ -28,16 +25,7 @@ static const cli_command_t task_list_cmd = {
     .handler = cmd_task_list_handler
 };
 
-#if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
-static const cli_command_t heap_test_cmd = {
-    .name = "heaptest",
-    .help = "Test heap allocator: heaptest <size>",
-    .handler = cmd_heap_test_handler
-};
-#endif
-
 /* Command handlers */
-
 static int cmd_heap_stats_handler(int argc, char **argv)
 {
     (void)argc;
@@ -45,14 +33,14 @@ static int cmd_heap_stats_handler(int argc, char **argv)
 
 #if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
     heap_stats_t stats;
-    if (heap_get_stats(&stats) == 0) {
+    if (stm32_allocator_dump_stats(&stats) == 0) {
         cli_printf("Heap Statistics:\r\n");
         cli_printf("  Total size:     %u bytes\r\n", (unsigned int)stats.total_size);
         cli_printf("  Used:           %u bytes\r\n", (unsigned int)stats.used_size);
         cli_printf("  Free:           %u bytes\r\n", (unsigned int)stats.free_size);
         cli_printf("  Largest block:  %u bytes\r\n", (unsigned int)stats.largest_free_block);
-        cli_printf("  Allocated blocks: %u\r\n", (unsigned int)stats.block_count);
-        cli_printf("  Free fragments:   %u\r\n", (unsigned int)stats.fragment_count);
+        cli_printf("  Allocated blocks: %u\r\n", (unsigned int)stats.allocated_blocks);
+        cli_printf("  Free fragments:   %u\r\n", (unsigned int)stats.free_blocks);
         
         if (stats.total_size > 0) {
             unsigned int percent = (stats.used_size * 100) / stats.total_size;
@@ -60,7 +48,7 @@ static int cmd_heap_stats_handler(int argc, char **argv)
         }
         
         /* Check integrity */
-        if (heap_check_integrity() == 0) {
+        if (stm32_allocator_check_integrity() == 0) {
             cli_printf("  Status:          OK\r\n");
         } else {
             cli_printf("  Status:          CORRUPTED!\r\n");
@@ -96,6 +84,7 @@ static int cmd_task_list_handler(int argc, char **argv)
                 case TASK_READY:    state_str = "READY"; break;
                 case TASK_RUNNING:  state_str = "RUNNING"; break;
                 case TASK_BLOCKED:  state_str = "BLOCKED"; break;
+                case TASK_ZOMBIE:   state_str = "ZOMBIE"; break;
                 default:            state_str = "UNKNOWN"; break;
             }
 
@@ -119,65 +108,10 @@ static int cmd_task_list_handler(int argc, char **argv)
     return 0;
 }
 
-#if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
-/* Simple string to unsigned int converter */
-static unsigned int str_to_uint(const char *str)
-{
-    unsigned int result = 0;
-    while (*str >= '0' && *str <= '9') {
-        result = result * 10 + (*str - '0');
-        str++;
-    }
-    return result;
-}
-
-static int cmd_heap_test_handler(int argc, char **argv)
-{
-    if (argc < 2) {
-        cli_printf("Usage: heaptest <size>\r\n");
-        cli_printf("  Allocates and frees memory of specified size\r\n");
-        return -1;
-    }
-
-    unsigned int size = str_to_uint(argv[1]);
-    if (size == 0) {
-        cli_printf("Invalid size: %s\r\n", argv[1]);
-        return -1;
-    }
-
-    cli_printf("Testing heap with %u bytes...\r\n", size);
-
-    void *ptr = heap_malloc(size);
-    if (ptr == NULL) {
-        cli_printf("Allocation FAILED\r\n");
-        return -1;
-    }
-
-    cli_printf("Allocated at: 0x%08x\r\n", (unsigned int)ptr);
-
-    heap_stats_t stats;
-    if (heap_get_stats(&stats) == 0) {
-        cli_printf("Free after alloc: %u bytes\r\n", (unsigned int)stats.free_size);
-    }
-
-    heap_free(ptr);
-    cli_printf("Freed successfully\r\n");
-
-    if (heap_get_stats(&stats) == 0) {
-        cli_printf("Free after free:  %u bytes\r\n", (unsigned int)stats.free_size);
-    }
-
-    return 0;
-}
-#endif
-
 /* Register all commands */
 void app_commands_register_all(void)
 {
     cli_register_command(&heap_stats_cmd);
     cli_register_command(&task_list_cmd);
-#if TASK_STACK_ALLOC_MODE == TASK_ALLOC_DYNAMIC
-    cli_register_command(&heap_test_cmd);
-#endif
 }
 
